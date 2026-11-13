@@ -25,6 +25,66 @@ const bikeLanePaint = {
   'line-opacity': 0.6, // Slightly less transparent
 };
 
+// Step 5.4: per-minute buckets (1440 minutes in a day)
+let departuresByMinute = Array.from({ length: 1440 }, () => []);
+let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
+
+// Step 5.2: format minutes since midnight as HH:MM AM/PM
+function formatTime(minutes) {
+  const date = new Date(0, 0, 0, 0, minutes); // Set hours & minutes
+  return date.toLocaleString('en-US', { timeStyle: 'short' }); // Format as HH:MM AM/PM
+}
+
+// Step 5.3: minutes since midnight for a Date
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+// Step 5.4: efficiently retrieve trips within 60 minutes of the selected minute
+function filterByMinute(tripsByMinute, minute) {
+  if (minute === -1) {
+    return tripsByMinute.flat(); // No filtering, return all trips
+  }
+
+  // Normalize both min and max minutes to the valid range [0, 1439]
+  let minMinute = (minute - 60 + 1440) % 1440;
+  let maxMinute = (minute + 60) % 1440;
+
+  // Handle time filtering across midnight
+  if (minMinute > maxMinute) {
+    let beforeMidnight = tripsByMinute.slice(minMinute);
+    let afterMidnight = tripsByMinute.slice(0, maxMinute);
+    return beforeMidnight.concat(afterMidnight).flat();
+  } else {
+    return tripsByMinute.slice(minMinute, maxMinute).flat();
+  }
+}
+
+// Step 5.3 / 5.4: compute arrivals, departures and total traffic per station
+function computeStationTraffic(stations, timeFilter = -1) {
+  // Retrieve filtered trips efficiently
+  const departures = d3.rollup(
+    filterByMinute(departuresByMinute, timeFilter),
+    (v) => v.length,
+    (d) => d.start_station_id,
+  );
+
+  const arrivals = d3.rollup(
+    filterByMinute(arrivalsByMinute, timeFilter),
+    (v) => v.length,
+    (d) => d.end_station_id,
+  );
+
+  // Update station data with filtered counts
+  return stations.map((station) => {
+    let id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+}
+
 // Step 3.3: convert a station's lon/lat to pixel coordinates on the map
 function getCoords(station) {
   const point = new mapboxgl.LngLat(+station.lon, +station.lat); // Convert lon/lat to Mapbox LngLat
@@ -81,31 +141,20 @@ map.on('load', async () => {
     (trip) => {
       trip.started_at = new Date(trip.started_at);
       trip.ended_at = new Date(trip.ended_at);
+
+      // Step 5.4: add trip to its departure and arrival minute buckets
+      let startedMinutes = minutesSinceMidnight(trip.started_at);
+      departuresByMinute[startedMinutes].push(trip);
+      let endedMinutes = minutesSinceMidnight(trip.ended_at);
+      arrivalsByMinute[endedMinutes].push(trip);
+
       return trip;
     },
   );
   console.log('Loaded trips:', trips.length);
 
-  // Step 4.2: calculate departures and arrivals per station
-  const departures = d3.rollup(
-    trips,
-    (v) => v.length,
-    (d) => d.start_station_id,
-  );
-  const arrivals = d3.rollup(
-    trips,
-    (v) => v.length,
-    (d) => d.end_station_id,
-  );
-
-  // Add arrivals, departures and totalTraffic to each station
-  stations = stations.map((station) => {
-    let id = station.short_name;
-    station.arrivals = arrivals.get(id) ?? 0;
-    station.departures = departures.get(id) ?? 0;
-    station.totalTraffic = station.arrivals + station.departures;
-    return station;
-  });
+  // Step 4.2: add arrivals, departures and totalTraffic to each station
+  stations = computeStationTraffic(stations);
   console.log('Stations with traffic:', stations);
 
   // Step 4.3: square root scale so circle AREA encodes traffic
@@ -120,7 +169,7 @@ map.on('load', async () => {
   // Append circles to the SVG for each station
   const circles = svg
     .selectAll('circle')
-    .data(stations)
+    .data(stations, (d) => d.short_name) // Use short_name as the key
     .enter()
     .append('circle')
     .attr('r', (d) => radiusScale(d.totalTraffic)) // Radius based on traffic
@@ -148,6 +197,53 @@ map.on('load', async () => {
   map.on('zoom', updatePositions); // Update during zooming
   map.on('resize', updatePositions); // Update on window resize
   map.on('moveend', updatePositions); // Final adjustment after movement ends
+
+  // Step 5.2: select the slider and display elements
+  const timeSlider = document.getElementById('time-slider');
+  const selectedTime = document.getElementById('selected-time');
+  const anyTimeLabel = document.getElementById('any-time');
+
+  // Step 5.3: update circles to reflect the time filter
+  function updateScatterPlot(timeFilter) {
+    // Recompute station traffic based on the time filter
+    const filteredStations = computeStationTraffic(stations, timeFilter);
+
+    // Larger circles when filtering, since fewer trips are shown
+    timeFilter === -1 ? radiusScale.range([0, 25]) : radiusScale.range([3, 50]);
+
+    // Update the scatterplot by adjusting the radius of circles
+    circles
+      .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
+      .join('circle')
+      .attr('r', (d) => radiusScale(d.totalTraffic)) // Update circle sizes
+      .each(function (d) {
+        // Keep tooltip text in sync
+        d3.select(this)
+          .select('title')
+          .text(
+            `${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`,
+          );
+      });
+  }
+
+  // Step 5.2: update the UI when the slider moves
+  function updateTimeDisplay() {
+    let timeFilter = Number(timeSlider.value); // Get slider value
+
+    if (timeFilter === -1) {
+      selectedTime.textContent = ''; // Clear time display
+      anyTimeLabel.style.display = 'block'; // Show "(any time)"
+    } else {
+      selectedTime.textContent = formatTime(timeFilter); // Display formatted time
+      anyTimeLabel.style.display = 'none'; // Hide "(any time)"
+    }
+
+    // Call updateScatterPlot to reflect the changes on the map
+    updateScatterPlot(timeFilter);
+  }
+
+  timeSlider.addEventListener('input', updateTimeDisplay);
+  updateTimeDisplay();
 
   // LAB7-NEXT-STEP-INSERTS-HERE
 });
