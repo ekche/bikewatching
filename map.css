@@ -25,8 +25,43 @@ body {
 }
 
 #map svg circle {
-  fill: steelblue;
+  fill: var(--color);
   fill-opacity: 60%;
   stroke: white;
   pointer-events: auto;
+}
+
+/* Step 6: shared color variables for circles and legend */
+#map circle,
+.legend > div {
+  --color-departures: steelblue;
+  --color-arrivals: darkorange;
+  --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+  );
+}
+
+/* Step 6.2: legend (Design 1: blocks) */
+.legend {
+  display: flex;
+  gap: 1px;
+  margin-block: 1em;
+}
+
+.legend > div {
+  flex: 1;
+  padding: 0.5em 2em;
+  background: var(--color);
+  color: white;
+  text-align: center;
+}
+
+.legend > div:first-child {
+  text-align: left;
+}
+
+.legend > div:last-child {
+  text-align: right;
 }

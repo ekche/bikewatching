@@ -163,6 +163,12 @@ map.on('load', async () => {
     .domain([0, d3.max(stations, (d) => d.totalTraffic)])
     .range([0, 25]);
 
+  // Step 6.1: discrete scale mapping departure ratio (0-1) to [0, 0.5, 1]
+  let stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
+  // Guard against stations with zero trips (0/0)
+  const departureRatio = (d) =>
+    d.totalTraffic ? stationFlow(d.departures / d.totalTraffic) : 0.5;
+
   // Step 3.3: select the SVG element inside the map container
   const svg = d3.select('#map').select('svg');
 
@@ -173,6 +179,7 @@ map.on('load', async () => {
     .enter()
     .append('circle')
     .attr('r', (d) => radiusScale(d.totalTraffic)) // Radius based on traffic
+    .style('--departure-ratio', (d) => departureRatio(d))
     .each(function (d) {
       // Step 4.4: add <title> for browser tooltips
       d3.select(this)
@@ -216,6 +223,7 @@ map.on('load', async () => {
       .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
       .join('circle')
       .attr('r', (d) => radiusScale(d.totalTraffic)) // Update circle sizes
+      .style('--departure-ratio', (d) => departureRatio(d))
       .each(function (d) {
         // Keep tooltip text in sync
         d3.select(this)
