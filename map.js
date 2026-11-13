@@ -253,5 +253,4 @@ map.on('load', async () => {
   timeSlider.addEventListener('input', updateTimeDisplay);
   updateTimeDisplay();
 
-  // LAB7-NEXT-STEP-INSERTS-HERE
 });

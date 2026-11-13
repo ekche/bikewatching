@@ -10,6 +10,7 @@ body {
 }
 
 header {
+  width: 100%;
   display: flex;
   gap: 1em;
   align-items: baseline;
