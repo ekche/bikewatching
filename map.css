@@ -43,25 +43,23 @@ body {
   );
 }
 
-/* Step 6.2: legend (Design 1: blocks) */
+/* Step 6.2: legend, compact overlay in the top-left of the map */
 .legend {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
   display: flex;
+  flex-direction: column;
   gap: 1px;
-  margin-block: 1em;
+  font-size: 0.8em;
+  pointer-events: none; /* keep the map pannable underneath */
 }
 
 .legend > div {
-  flex: 1;
-  padding: 0.5em 2em;
+  padding: 0.3em 0.9em;
   background: var(--color);
   color: white;
   text-align: center;
-}
-
-.legend > div:first-child {
-  text-align: left;
-}
-
-.legend > div:last-child {
-  text-align: right;
+  border-radius: 3px;
 }
