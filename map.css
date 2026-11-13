@@ -46,18 +46,18 @@ body {
 /* Step 6.2: legend, compact overlay in the top-left of the map */
 .legend {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 14px;
+  left: 14px;
   z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  font-size: 0.8em;
+  font-size: 1.05em;
   pointer-events: none; /* keep the map pannable underneath */
 }
 
 .legend > div {
-  padding: 0.3em 0.9em;
+  padding: 0.5em 1.2em;
   background: var(--color);
   color: white;
   text-align: center;
